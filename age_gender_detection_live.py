@@ -1,5 +1,7 @@
+from flask import Flask, render_template, Response
 import cv2
-import time
+
+app = Flask(__name__)
 
 def getFaceBox(net, frame, conf_threshold=0.75):
     frameOpencvDnn = frame.copy()
@@ -23,15 +25,13 @@ def getFaceBox(net, frame, conf_threshold=0.75):
 
     return frameOpencvDnn, bboxes
 
+# Load pre-trained models
 faceProto = "opencv_face_detector.pbtxt"
 faceModel = "opencv_face_detector_uint8.pb"
-
 ageProto = "age_deploy.prototxt"
 ageModel = "age_net.caffemodel"
-
 genderProto = "gender_deploy.prototxt"
 genderModel = "gender_net.caffemodel"
-
 MODEL_MEAN_VALUES = (78.4263377603, 87.7689143744, 114.895847746)
 ageList = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
 genderList = ['Male', 'Female']
@@ -41,60 +41,47 @@ ageNet = cv2.dnn.readNet(ageModel, ageProto)
 genderNet = cv2.dnn.readNet(genderModel, genderProto)
 faceNet = cv2.dnn.readNet(faceModel, faceProto)
 
-cap = cv2.VideoCapture(0)
-padding = 20
+def generate_frames():
+    cap = cv2.VideoCapture(0)
+    padding = 20
 
-# Window name and size
-window_name = "Real-Time Age and Gender Detection"
-cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-cv2.resizeWindow(window_name, 640, 480)  # Adjust this size as desired
+    while True:
+        hasFrame, frame = cap.read()
+        if not hasFrame:
+            break
 
-print("Press 'q' to quit the application.")
+        frameFace, bboxes = getFaceBox(faceNet, frame)
 
-while True:
-    hasFrame, frame = cap.read()
+        for bbox in bboxes:
+            face = frame[max(0, bbox[1] - padding):min(bbox[3] + padding, frame.shape[0] - 1),
+                         max(0, bbox[0] - padding):min(bbox[2] + padding, frame.shape[1] - 1)]
+            blob = cv2.dnn.blobFromImage(face, 1.0, (227, 227), MODEL_MEAN_VALUES, swapRB=False)
+            
+            genderNet.setInput(blob)
+            genderPreds = genderNet.forward()
+            gender = genderList[genderPreds[0].argmax()]
 
-    if not hasFrame:
-        cv2.waitKey()
-        break
+            ageNet.setInput(blob)
+            agePreds = ageNet.forward()
+            age = ageList[agePreds[0].argmax()]
 
-    # Create a smaller frame for better optimization
-    small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
+            label = "{}, {}".format(gender, age)
+            cv2.putText(frameFace, label, (bbox[0], bbox[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2, cv2.LINE_AA)
 
-    frameFace, bboxes = getFaceBox(faceNet, small_frame)
-    if not bboxes:
-        print("No face Detected, Checking next frame")
-        continue
+        ret, buffer = cv2.imencode('.jpg', frameFace)
+        frame = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
-    for bbox in bboxes:
-        face = small_frame[max(0, bbox[1] - padding):min(bbox[3] + padding, frame.shape[0] - 1),
-                           max(0, bbox[0] - padding):min(bbox[2] + padding, frame.shape[1] - 1)]
-        blob = cv2.dnn.blobFromImage(face, 1.0, (227, 227), MODEL_MEAN_VALUES, swapRB=False)
-        
-        genderNet.setInput(blob)
-        genderPreds = genderNet.forward()
-        gender = genderList[genderPreds[0].argmax()]
+    cap.release()
 
-        ageNet.setInput(blob)
-        agePreds = ageNet.forward()
-        age = ageList[agePreds[0].argmax()]
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-        label = "{}, {}".format(gender, age)
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-        # Draw a semi-transparent background for the text label
-        (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-        cv2.rectangle(frameFace, (bbox[0], bbox[1] - text_height - baseline), (bbox[0] + text_width, bbox[1]), (0, 0, 0), thickness=cv2.FILLED)
-        
-        cv2.putText(frameFace, label, (bbox[0], bbox[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2, cv2.LINE_AA)
-        
-    # Display instructions
-    cv2.putText(frameFace, "Press 'q' to quit", (10, 460), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
-
-    cv2.imshow(window_name, frameFace)
-
-    # Break the loop on 'q' key press
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    app.run(debug=True)
