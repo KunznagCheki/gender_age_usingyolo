@@ -2,9 +2,17 @@
     "builds": [
       {
         "src": "*.py",
-        "use": "@vercel/python",
-        "output": "."
+        "use": "@vercel/python"
       }
-    ]
+    ],
+    "routes": [
+      {
+        "src": "/(.*)",
+        "dest": "app.py"  
+      }
+    ],
+    "installCommand": "python3 -m pip install -r requirements.txt",
+    "buildCommand": "", 
+    "outputDirectory": "."
   }
   
