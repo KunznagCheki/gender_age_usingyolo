@@ -97,7 +97,7 @@ nltk==3.9.1
 numpy==1.26.4
 oauthlib==3.2.2
 openai==1.52.2
-opencv-python-headless==4.10.0.84  # Updated to headless version
+opencv-python==4.10.0.84
 opentelemetry-api==1.27.0
 opt_einsum==3.4.0
 optree==0.13.0
@@ -156,3 +156,4 @@ Werkzeug==3.0.3
 wrapt==1.14.1
 xmljson==0.2.1
 zipp==3.20.2
+
