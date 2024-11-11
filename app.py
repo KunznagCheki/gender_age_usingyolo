@@ -63,4 +63,4 @@ while cv2.waitKey(1) < 0:
     cv2.imshow("Age Gender Demo", frame_display)
 
 cap.release()
-cv2.destroyAllWindows()
+# cv2.destroyAllWindows()
