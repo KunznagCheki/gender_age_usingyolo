@@ -1,5 +1,6 @@
 import cv2
 import time
+import os
 
 def getFaceBox(net, frame, conf_threshold=0.75):
     frameHeight, frameWidth = frame.shape[:2]
@@ -28,10 +29,15 @@ ageList, genderList = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43
 cap = cv2.VideoCapture(0)
 padding = 20
 
-# Adjust window display size
+# Adjust window display size (only if GUI is available)
 window_scale = 0.6
-cv2.namedWindow("Age Gender Demo", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("Age Gender Demo", int(640 * window_scale), int(480 * window_scale))
+
+# Check if DISPLAY environment variable is set (which indicates a GUI environment)
+if 'DISPLAY' in os.environ:
+    cv2.namedWindow("Age Gender Demo", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("Age Gender Demo", int(640 * window_scale), int(480 * window_scale))
+else:
+    print("Running in a headless environment, display disabled.")
 
 while cv2.waitKey(1) < 0:
     hasFrame, frame = cap.read()
@@ -54,13 +60,21 @@ while cv2.waitKey(1) < 0:
         ageNet.setInput(blob)
         agePreds = ageNet.forward()
         age = ageList[agePreds[0].argmax()]
-        
+
         label = "{}, {}".format(gender, age)
         cv2.putText(frameFace, label, (bbox[0], bbox[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
     
-    # Display with centered and adjusted frame size
-    frame_display = cv2.resize(frameFace, (int(frame.shape[1] * window_scale), int(frame.shape[0] * window_scale)))
-    cv2.imshow("Age Gender Demo", frame_display)
+    # If GUI is available, display the image
+    if 'DISPLAY' in os.environ:
+        # Display with centered and adjusted frame size
+        frame_display = cv2.resize(frameFace, (int(frame.shape[1] * window_scale), int(frame.shape[0] * window_scale)))
+        cv2.imshow("Age Gender Demo", frame_display)
+    else:
+        # Save the frame to a file instead of displaying it
+        cv2.imwrite("output_frame.jpg", frameFace)  # Save the image to a file
 
 cap.release()
-cv2.destroyAllWindows()
+
+# Close all OpenCV windows if running in GUI mode
+if 'DISPLAY' in os.environ:
+    cv2.destroyAllWindows()
